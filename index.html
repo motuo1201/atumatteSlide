@@ -1,0 +1,270 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>reveal.js</title>
+
+		<link rel="stylesheet" href="css/reveal.css">
+		<link rel="stylesheet" href="css/theme/night.css">
+
+		<!-- Theme used for syntax highlighting of code -->
+		<link rel="stylesheet" href="lib/css/zenburn.css">
+
+		<!-- Printing and PDF exports -->
+		<script>
+			var link = document.createElement( 'link' );
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+			document.getElementsByTagName( 'head' )[0].appendChild( link );
+		</script>
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+				<section data-markdown data-timing>
+					<textarea data-template>
+						####  teratailのAPIで過去の質問・回答を
+						取得するシステムを作る
+
+						motuo:2017-12-13
+					</textarea>
+					<aside class="notes">
+							Oh hey, these are some notes. They'll be hidden in your presentation, but you can see them if you open the speaker notes window (hit 's' on your keyboard).
+						</aside>
+				</section>
+				<section data-markdown>
+					<textarea data-template>
+						#### 自己紹介
+					</textarea>
+					<aside class="notes">
+							Oh hey, these are some notes. They'll be hidden in your presentation, but you can see them if you open the speaker notes window (hit 's' on your keyboard).
+					</aside>
+				</section>
+				<section data-markdown>
+					<textarea data-template>
+						![myLogo.jpg](./images/myLogo.jpg)
+						+ 名前:motuo
+						+ メインのお仕事:物流系企業の社内SE
+						+ 良く使う言語:
+							- PHP
+							- VBA
+							- RPG(ゲームじゃないですよ！)
+					</textarea>			
+				</section>
+				<section data-markdown>
+					今年のトピックといえば…
+				</section>
+				<section data-markdown>
+					<textarea data-template>
+						埼玉西武ライオンズがパリーグ2位で
+
+						シーズンを終えましたね！
+
+						<p class="fragment" data-fragment-index="1">
+						<label style="color:red">(**今年はＣＳ・日本シリーズはありませんでした**)</label>
+						</p>	
+					</textarea>
+				</section>
+				<section data-markdown>
+					では無くて
+				</section>
+				<section data-markdown>
+					<textarea data-template>
+						###### このテーマを取り上げてみたいと思います。
+
+						teratail の過去遺産をもっと活用したい
+						![myLogo.jpg](./images/question.png)
+					</textarea>
+				</section>
+				<section data-markdown>
+						<textarea data-template>
+							確かに…
+							+ 検索機能はあっても思った通りに結果が得られない事があったり…
+							+ 自分自身の回答を検索する機能が無かったり…
+							![myLogo.jpg](./images/searchwindow.png)
+						</textarea>
+					</section>
+				</section>
+				<section data-markdown>
+						<textarea data-template>
+							ないなら作れば良いじゃない！
+						</textarea>
+					</section>
+				</section>
+				<section data-markdown>
+						<textarea data-template>
+							というわけで<a href="https://teratailv1.docs.apiary.io/#">APIドキュメント</a>を参考に
+							
+							Laravel5.5で作ってみました。
+						</textarea>
+					</section>
+				</section>
+				<section data-markdown>
+						<textarea data-template>
+							画面イメージはこんな感じ
+							![myLogo.jpg](./images/searchScreen.png)
+						</textarea>
+					</section>
+				</section>
+				<section data-markdown>
+						<textarea data-template>
+							検索結果
+							![myLogo.jpg](./images/searchResult.png)
+						</textarea>
+					</section>
+				</section>
+				<section data-markdown>
+						<textarea data-template>
+							使ったAPIは以下の2つです。
+							+ 特定のユーザーの質問を取得する (https://teratail.com/api/v1/users/display_name/questions)
+							+ 特定のユーザーの回答を取得する(https://teratail.com/api/v1/users/display_name/replies)
+						</textarea>
+					</section>
+				</section>
+				<section>
+						<section data-markdown>
+							<textarea data-template>
+									記事を一度に取得できる件数は100件が限度の為、
+									
+									ページネーションしながら
+									
+									指定されたユーザーの質問または、
+									
+									回答の全記事を取得しています。
+
+							</textarea>
+						</section>
+						<section data-markdown>
+								<textarea data-template>
+									ソースコード(抜粋) 検索ロジック
+									```PHP
+									/***
+										* APIを使って自分が回答した内容を検索する
+										*/
+									private function getMyArticles(Array $requestParam){
+										if($requestParam['answerOrQuestion']=='isAnswer'){
+											$url = 'https://teratail.com/api/v1/users/'. $requestParam['userID'] .'/replies?limit=100';
+											$category = 'replies';
+										}else{
+											$url = 'https://teratail.com/api/v1/users/'. $requestParam['userID'] .'/questions?limit=100';
+											$category = 'questions';
+										}
+										$resultArray = teratailAPI::callAPI($requestParam,$url);
+										$meta = $resultArray['meta'];
+										//リクエストに失敗したら処理終了
+										if($meta['message'] != 'success'){
+											dd($meta['message']);
+										}
+										$searchArray = explode (' ',$requestParam['searchWord']);
+										$returnQuestions = utils::searchWord($resultArray[$category], $searchArray);
+										//質問もしくはを100件以上していたらページネーションして全記事を取得
+										if($meta['hit_num'] > 100){
+											$page = ceil($meta['hit_num'] / 100);
+											for($i=2;$i<$page+1;$i++){
+												$resultArrayAdds = teratailAPI::callAPI($requestParam,$url,$i);//2ページ目以降
+												$returnQuestionsAdded =  utils::searchWord($resultArrayAdds[$category], $searchArray);
+												$returnQuestions =  array_merge($returnQuestions, $returnQuestionsAdded);
+											}
+										}
+										return $returnQuestions;
+									}
+								}
+								```
+								</textarea>
+						</section>
+						<section data-markdown>
+								<textarea data-template>
+									ソースコード(抜粋) API取得ロジック
+									```PHP
+									/**
+									* 実際にAPIを実行する処理。取得結果を配列にデコードして返却
+									* @param array $requestParam ユーザID,アクセストークンを利用
+									* @param string $url
+									* @param int $page
+									* @return type
+									*/
+									public function callAPI(Array $requestParam, string $url,int $page=0) {
+										$access_token = $requestParam['accesstoken'];
+										if($page){
+											$url .= '&page='.$page;
+										}
+										$curl = curl_init();
+										curl_setopt($curl, CURLOPT_URL, $url);
+										curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'GET');
+										curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+										curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false); // 証明書の検証を行わない
+										curl_setopt($curl, CURLOPT_HTTPHEADER, array('Authorization: Bearer '.$access_token));
+								
+										$result = curl_exec($curl);
+										curl_close($curl);
+										return json_decode($result,true);
+									}
+								```
+								</textarea>
+						</section>
+				</section>
+
+				<section data-markdown>
+						<textarea data-template>
+							### 使ってみた感想
+							APIの利用はとっても簡単に出来ます。
+
+							Webシステムへの組み込みも簡単にできました。
+						</textarea>
+				</section>
+				<section data-markdown>
+						<textarea data-template>
+							### 強いて要望を言うなら…
+
+							<p class="fragment" data-fragment-index="1">
+						
+							・ 回答のAPIには質問のタイトルがほしい！
+						
+							</p>
+							<p class="fragment" data-fragment-index="2">
+								
+							・ ~~ｔｅｒａｔａｉｌの検索機能をもう少し改善して貰えると…~~
+							</p>					
+						</textarea>
+				</section>
+				<section data-markdown>
+						<textarea data-template>
+							### このサイトは現在、Bluemix上で
+							稼働中です。
+
+							良かったら使ってみてください。
+
+							https://teratailapisearch.eu-de.mybluemix.net/
+
+						</textarea>
+				</section>
+				<section data-markdown>
+					ありがとうございました。
+					
+					良いお年を！
+				</section>
+				</section>
+			</div>
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.js"></script>
+
+		<script>
+			// More info about config & dependencies:
+			// - https://github.com/hakimel/reveal.js#configuration
+			// - https://github.com/hakimel/reveal.js#dependencies
+			Reveal.initialize({
+				dependencies: [
+					{ src: 'plugin/markdown/marked.js' },
+					{ src: 'plugin/markdown/markdown.js' },
+					{ src: 'plugin/notes/notes.js', async: true },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
+				]
+			});
+		</script>
+	</body>
+</html>
